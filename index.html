@@ -21,8 +21,11 @@
         <div id="moedas-count-wrapper">🪙 Moedas do Casal: <span id="moedas-count">0</span></div>
     </div>
 
+    <!-- Navegação Atualizada -->
     <nav>
         <button class="nav-btn active" onclick="mudarTela('tela-mural', this)">📸 Mural</button>
+        <button class="nav-btn" onclick="mudarTela('tela-diario', this)">📖 Diário</button>
+        <button class="nav-btn" onclick="mudarTela('tela-datas', this)">📅 Datas</button>
         <button class="nav-btn" onclick="mudarTela('tela-missoes', this)">🎯 Missões</button>
         <button class="nav-btn" onclick="mudarTela('tela-loja', this)">🍿 Loja</button>
         <button class="nav-btn" onclick="mudarTela('tela-encontros', this)">🌹 Encontros</button>
@@ -56,6 +59,50 @@
             <button class="action-btn btn-full" onclick="salvarLembrancaMural()">💾 Salvar Lembrança</button>
             <button class="action-btn btn-full btn-secondary" onclick="fecharModalMural()">Cancelar</button>
         </div>
+    </div>
+
+    <!-- TELA 1 NOVA: Diário Semanal -->
+    <div id="tela-diario" class="app-screen">
+        <h3 class="section-title">📖 Diário Semanal do Casal</h3>
+        <p class="section-subtitle">Escrevam juntos os destaques e memórias de cada semana!</p>
+        
+        <button class="action-btn btn-full" onclick="abrirModalDiario()" style="margin-bottom:20px;">
+            ✍️ Registrar Nova Semana
+        </button>
+
+        <div id="lista-diario" class="diario-grid"></div>
+    </div>
+
+    <!-- Modal Diário -->
+    <div id="modal-diario" class="modal-overlay" style="display:none;">
+        <div class="modal-content">
+            <h4 id="diario-modal-titulo">Novo Registro Semanal</h4>
+            <input type="hidden" id="diario-edit-id">
+            <div class="form-group">
+                <label>Semana / Período:</label>
+                <input type="text" id="diario-titulo" placeholder="Ex: Semana de 10 a 16 de Julho">
+            </div>
+            <div class="form-group">
+                <label>Relato da Semana:</label>
+                <textarea id="diario-conteudo" rows="6" placeholder="Como foi a semana de vocês? O que fizeram de especial?"></textarea>
+            </div>
+            <button class="action-btn btn-full" onclick="salvarDiario()">💾 Salvar Registro</button>
+            <button class="action-btn btn-full btn-secondary" onclick="fecharModalDiario()">Cancelar</button>
+        </div>
+    </div>
+
+    <!-- TELA 2 NOVA: Datas Importantes -->
+    <div id="tela-datas" class="app-screen">
+        <h3 class="section-title">📅 Datas Importantes</h3>
+        <p class="section-subtitle">Aniversários, viagens e momentos inesquecíveis</p>
+
+        <div class="form-container" style="margin-bottom: 20px;">
+            <input type="text" id="data-titulo" placeholder="Ex: Aniversário de Namoro 💖">
+            <input type="date" id="data-evento">
+            <button class="action-btn" onclick="salvarDataImportante()">➕ Salvar Data</button>
+        </div>
+
+        <div id="lista-datas" class="datas-grid"></div>
     </div>
 
     <!-- Tela Missões -->
@@ -107,8 +154,13 @@
         </div>
     </div>
 
-    <!-- Biblioteca de Confete -->
+   <!-- Biblioteca de Confete -->
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <!-- Firebase SDK (Módulos de Compatibilidade) -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
     <script src="script.js"></script>
 </body>
 </html>
