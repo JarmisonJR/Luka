@@ -1,19 +1,25 @@
-// --- CONFIGURAÇÃO INICIAL E LOCALSTORAGE ---
-const DATA_INICIO_NAMORO = new Date("2023-01-01T00:00:00"); 
+// --- CONFIGURAÇÃO DO FIREBASE ---
+const firebaseConfig = {
+    apiKey: "AIzaSyCMfiBAOQoBAp28Y9NqMut3Y_p3HCVY7Zo",
+    authDomain: "luka-cd476.firebaseapp.com",
+    databaseURL: "https://luka-cd476-default-rtdb.firebaseio.com",
+    projectId: "luka-cd476",
+    storageBucket: "luka-cd476.firebasestorage.app",
+    messagingSenderId: "663767966684",
+    appId: "1:663767966684:web:db0c180c9908c2f6ff6519",
+    measurementId: "G-PB337J54MV"
+  };
+// Inicializar Firebase e Firestore
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
 
-const STORAGE_KEYS = {
-    MOEDAS: 'casal_moedas',
-    MURAL: 'casal_mural',
-    MISSOES: 'casal_missoes',
-    CUPONS: 'casal_cupons',
-    ULTIMA_DATA_MISSOES: 'casal_ultima_data_missoes'
-};
+const DATA_INICIO_NAMORO = new Date("2023-01-01T00:00:00");
 
 const missoesBase = [
-    { id: 1, titulo: "Assistir um filme juntos", recompensa: 50 },
-    { id: 2, titulo: "Cozinhar uma receita nova", recompensa: 100 },
-    { id: 3, titulo: "Fazer um passeio ao ar livre", recompensa: 80 },
-    { id: 4, titulo: "Escrever uma mensagem carinhosa", recompensa: 60 }
+    { id: "m1", titulo: "Assistir um filme juntos", recompensa: 50 },
+    { id: "m2", titulo: "Cozinhar uma receita nova", recompensa: 100 },
+    { id: "m3", titulo: "Fazer um passeio ao ar livre", recompensa: 80 },
+    { id: "m4", titulo: "Escrever uma mensagem carinhosa", recompensa: 60 }
 ];
 
 const itensLoja = [
@@ -36,11 +42,13 @@ const atividadesRoleta = [
 // --- INICIALIZAÇÃO DO APP ---
 document.addEventListener('DOMContentLoaded', () => {
     iniciarContador();
-    carregarMoedas();
-    carregarMural();
-    verificarEAtualizarMissoesDiarias();
+    ouvirMoedas();
+    ouvirMural();
+    ouvirDiario();
+    ouvirDatasImportantes();
+    ouvirMissoes();
     carregarLoja();
-    carregarCupons();
+    ouvirCupons();
 });
 
 // --- NAVEGAÇÃO ---
@@ -69,20 +77,181 @@ function iniciarContador() {
     setInterval(atualizar, 1000);
 }
 
-// --- MOEDAS ---
-function carregarMoedas() {
-    const moedas = localStorage.getItem(STORAGE_KEYS.MOEDAS) || 0;
-    document.getElementById('moedas-count').innerText = moedas;
+// --- MOEDAS (FIREBASE) ---
+function ouvirMoedas() {
+    db.collection('geral').doc('moedas').onSnapshot(doc => {
+        const total = doc.exists ? doc.data().valor : 0;
+        document.getElementById('moedas-count').innerText = total;
+    });
 }
 
-function alterarMoedas(qtd) {
-    let moedas = parseInt(localStorage.getItem(STORAGE_KEYS.MOEDAS) || 0);
-    moedas += qtd;
-    localStorage.setItem(STORAGE_KEYS.MOEDAS, moedas);
-    document.getElementById('moedas-count').innerText = moedas;
+async function alterarMoedas(qtd) {
+    const docRef = db.collection('geral').doc('moedas');
+    const doc = await docRef.get();
+    let atual = doc.exists ? doc.data().valor : 0;
+    await docRef.set({ valor: atual + qtd });
 }
 
-// --- MURAL COM UPLOAD DE MIDIA (BASE64) ---
+// --- TELA: DIÁRIO SEMANAL (FIREBASE) ---
+function abrirModalDiario(id = null) {
+    const modal = document.getElementById('modal-diario');
+    const inputId = document.getElementById('diario-edit-id');
+    const inputTitulo = document.getElementById('diario-titulo');
+    const inputConteudo = document.getElementById('diario-conteudo');
+    const modalTitulo = document.getElementById('diario-modal-titulo');
+
+    if (id) {
+        db.collection('diario').doc(id).get().then(doc => {
+            if (doc.exists) {
+                const item = doc.data();
+                inputId.value = doc.id;
+                inputTitulo.value = item.titulo;
+                inputConteudo.value = item.conteudo;
+                modalTitulo.innerText = "Editar Registro Semanal";
+                modal.style.display = 'flex';
+            }
+        });
+    } else {
+        inputId.value = '';
+        inputTitulo.value = '';
+        inputConteudo.value = '';
+        modalTitulo.innerText = "Novo Registro Semanal";
+        modal.style.display = 'flex';
+    }
+}
+
+function fecharModalDiario() {
+    document.getElementById('modal-diario').style.display = 'none';
+}
+
+async function salvarDiario() {
+    const id = document.getElementById('diario-edit-id').value;
+    const titulo = document.getElementById('diario-titulo').value.trim();
+    const conteudo = document.getElementById('diario-conteudo').value.trim();
+
+    if (!titulo || !conteudo) {
+        mostrarToast('Preencha a semana e o relato!');
+        return;
+    }
+
+    const dados = {
+        titulo,
+        conteudo,
+        criadoEm: firebase.firestore.FieldValue.serverTimestamp()
+    };
+
+    if (id) {
+        await db.collection('diario').doc(id).update(dados);
+    } else {
+        await db.collection('diario').add(dados);
+    }
+
+    fecharModalDiario();
+    mostrarToast('Diário salvo no Firebase! 📖');
+}
+
+function ouvirDiario() {
+    db.collection('diario').orderBy('criadoEm', 'desc').onSnapshot(snapshot => {
+        const container = document.getElementById('lista-diario');
+        if (snapshot.empty) {
+            container.innerHTML = '<p style="text-align:center; color:var(--text-muted);">Nenhum relato no diário ainda.</p>';
+            return;
+        }
+
+        container.innerHTML = snapshot.docs.map(doc => {
+            const item = doc.data();
+            return `
+                <div class="diario-card">
+                    <div class="card-actions">
+                        <button class="card-btn" onclick="abrirModalDiario('${doc.id}')">✏️</button>
+                        <button class="card-btn delete" onclick="deletarDiario('${doc.id}')">🗑️</button>
+                    </div>
+                    <h5>${item.titulo}</h5>
+                    <p>${item.conteudo}</p>
+                </div>
+            `;
+        }).join('');
+    });
+}
+
+function deletarDiario(id) {
+    db.collection('diario').doc(id).delete();
+}
+
+// --- TELA: DATAS IMPORTANTES (FIREBASE) ---
+async function salvarDataImportante() {
+    const titulo = document.getElementById('data-titulo').value.trim();
+    const dataEvento = document.getElementById('data-evento').value;
+
+    if (!titulo || !dataEvento) {
+        mostrarToast('Preencha o título e a data!');
+        return;
+    }
+
+    await db.collection('datas').add({ titulo, dataEvento });
+
+    document.getElementById('data-titulo').value = '';
+    document.getElementById('data-evento').value = '';
+
+    mostrarToast('Data salva com sucesso! 📅');
+}
+
+function ouvirDatasImportantes() {
+    db.collection('datas').onSnapshot(snapshot => {
+        const container = document.getElementById('lista-datas');
+        if (snapshot.empty) {
+            container.innerHTML = '<p style="text-align:center; color:var(--text-muted);">Nenhuma data importante cadastrada.</p>';
+            return;
+        }
+
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
+
+        const lista = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        lista.sort((a, b) => new Date(a.dataEvento) - new Date(b.dataEvento));
+
+        container.innerHTML = lista.map(item => {
+            const dataEv = new Date(item.dataEvento + 'T00:00:00');
+            const diffTempo = dataEv - hoje;
+            const diffDias = Math.ceil(diffTempo / (1000 * 60 * 60 * 24));
+
+            let statusTexto = '';
+            let eAlerta = false;
+
+            if (diffDias === 0) {
+                statusTexto = '🎉 É HOJE!';
+                eAlerta = true;
+            } else if (diffDias > 0 && diffDias <= 7) {
+                statusTexto = `🚨 Faltam apenas ${diffDias} dia(s)!`;
+                eAlerta = true;
+            } else if (diffDias > 0) {
+                statusTexto = `Faltam ${diffDias} dias`;
+            } else {
+                statusTexto = `Passou há ${Math.abs(diffDias)} dias`;
+            }
+
+            const dataFormatada = dataEv.toLocaleDateString('pt-BR');
+
+            return `
+                <div class="data-card ${eAlerta ? 'alerta' : ''}">
+                    <div class="card-actions">
+                        <button class="card-btn delete" onclick="deletarDataImportante('${item.id}')">🗑️</button>
+                    </div>
+                    ${eAlerta ? `<span class="badge-alerta">${statusTexto}</span>` : ''}
+                    <h5>${item.titulo}</h5>
+                    <p style="font-size:0.9rem; color:var(--text-muted);">Data: ${dataFormatada}</p>
+                    ${!eAlerta ? `<p style="font-size:0.85rem; margin-top:5px;">${statusTexto}</p>` : ''}
+                </div>
+            `;
+        }).join('');
+    });
+}
+
+function deletarDataImportante(id) {
+    db.collection('datas').doc(id).delete();
+}
+
+// --- TELA: MURAL DE LEMBRANÇAS (FIREBASE) ---
 function abrirModalGerenciarMural() {
     document.getElementById('modal-mural').style.display = 'flex';
 }
@@ -101,7 +270,7 @@ function salvarLembrancaMural() {
     const file = fileInput.files[0];
 
     if (!titulo || !legenda) {
-        mostrarToast('Preencha pelo menos o título e a descrição!');
+        mostrarToast('Preencha título e descrição!');
         return;
     }
 
@@ -118,109 +287,93 @@ function salvarLembrancaMural() {
     }
 }
 
-function guardarLembranca(titulo, legenda, mediaData, mediaType) {
-    const lembrancas = JSON.parse(localStorage.getItem(STORAGE_KEYS.MURAL) || '[]');
-    lembrancas.unshift({
-        id: Date.now(),
+async function guardarLembranca(titulo, legenda, mediaData, mediaType) {
+    await db.collection('mural').add({
         titulo,
         legenda,
         mediaData,
-        mediaType
+        mediaType,
+        criadoEm: firebase.firestore.FieldValue.serverTimestamp()
     });
-    localStorage.setItem(STORAGE_KEYS.MURAL, JSON.stringify(lembrancas));
 
     fecharModalMural();
-    carregarMural();
     mostrarToast('Lembrança salva no Mural! 💖');
 }
 
-function carregarMural() {
-    const container = document.getElementById('mural-container');
-    const lembrancas = JSON.parse(localStorage.getItem(STORAGE_KEYS.MURAL) || '[]');
-
-    if (lembrancas.length === 0) {
-        container.innerHTML = '<p style="text-align:center; color:var(--text-muted);">Nenhuma lembrança salva ainda.</p>';
-        return;
-    }
-
-    container.innerHTML = lembrancas.map(item => {
-        let mediaHtml = '';
-        if (item.mediaData) {
-            if (item.mediaType === 'video') {
-                mediaHtml = `<video src="${item.mediaData}" controls></video>`;
-            } else {
-                mediaHtml = `<img src="${item.mediaData}" alt="Foto da lembrança">`;
-            }
+function ouvirMural() {
+    db.collection('mural').orderBy('criadoEm', 'desc').onSnapshot(snapshot => {
+        const container = document.getElementById('mural-container');
+        if (snapshot.empty) {
+            container.innerHTML = '<p style="text-align:center; color:var(--text-muted);">Nenhuma lembrança salva ainda.</p>';
+            return;
         }
 
-        return `
-            <div class="mural-card">
-                <button class="delete-btn" onclick="deletarLembranca(${item.id})">🗑️</button>
-                ${mediaHtml}
-                <h5>${item.titulo}</h5>
-                <p>${item.legenda}</p>
-            </div>
-        `;
-    }).join('');
+        container.innerHTML = snapshot.docs.map(doc => {
+            const item = doc.data();
+            let mediaHtml = '';
+            if (item.mediaData) {
+                if (item.mediaType === 'video') {
+                    mediaHtml = `<video src="${item.mediaData}" controls></video>`;
+                } else {
+                    mediaHtml = `<img src="${item.mediaData}" alt="Foto da lembrança">`;
+                }
+            }
+
+            return `
+                <div class="mural-card">
+                    <div class="card-actions">
+                        <button class="card-btn delete" onclick="deletarLembranca('${doc.id}')">🗑️</button>
+                    </div>
+                    ${mediaHtml}
+                    <h5>${item.titulo}</h5>
+                    <p>${item.legenda}</p>
+                </div>
+            `;
+        }).join('');
+    });
 }
 
 function deletarLembranca(id) {
-    let lembrancas = JSON.parse(localStorage.getItem(STORAGE_KEYS.MURAL) || '[]');
-    lembrancas = lembrancas.filter(item => item.id !== id);
-    localStorage.setItem(STORAGE_KEYS.MURAL, JSON.stringify(lembrancas));
-    carregarMural();
+    db.collection('mural').doc(id).delete();
 }
 
-// --- MISSÕES DIÁRIAS (RESET AUTOMÁTICO) ---
-function verificarEAtualizarMissoesDiarias() {
+// --- MISSÕES DIÁRIAS (FIREBASE) ---
+function ouvirMissoes() {
     const hoje = new Date().toDateString();
-    const ultimaData = localStorage.getItem(STORAGE_KEYS.ULTIMA_DATA_MISSOES);
 
-    let missoes = JSON.parse(localStorage.getItem(STORAGE_KEYS.MISSOES));
+    db.collection('missoes').onSnapshot(snapshot => {
+        const container = document.getElementById('lista-missoes');
+        
+        container.innerHTML = missoesBase.map(mBase => {
+            const docEncontrado = snapshot.docs.find(d => d.id === mBase.id);
+            const dadosDoc = docEncontrado ? docEncontrado.data() : null;
+            const concluida = dadosDoc && dadosDoc.dataConclusao === hoje;
 
-    // Se mudou de dia ou não tem missões salvas, reseta o progresso
-    if (ultimaData !== hoje || !missoes) {
-        missoes = missoesBase.map(m => ({ ...m, concluida: false }));
-        localStorage.setItem(STORAGE_KEYS.MISSOES, JSON.stringify(missoes));
-        localStorage.setItem(STORAGE_KEYS.ULTIMA_DATA_MISSOES, hoje);
-    }
-
-    carregarMissoes();
+            return `
+                <div class="item-card">
+                    <div>
+                        <strong>${mBase.titulo}</strong>
+                        <div style="font-size:0.85rem; color:var(--text-muted);">+${mBase.recompensa} moedas</div>
+                    </div>
+                    <button class="action-btn" ${concluida ? 'disabled style="background:#475569;"' : ''} 
+                        onclick="concluirMissao('${mBase.id}', ${mBase.recompensa})">
+                        ${concluida ? 'Concluída ✓' : 'Cumprir 🎯'}
+                    </button>
+                </div>
+            `;
+        }).join('');
+    });
 }
 
-function carregarMissoes() {
-    const missoes = JSON.parse(localStorage.getItem(STORAGE_KEYS.MISSOES) || '[]');
-    const container = document.getElementById('lista-missoes');
-
-    container.innerHTML = missoes.map(m => `
-        <div class="item-card">
-            <div>
-                <strong>${m.titulo}</strong>
-                <div style="font-size:0.85rem; color:var(--text-muted);">+${m.recompensa} moedas</div>
-            </div>
-            <button class="action-btn" ${m.concluida ? 'disabled style="background:#475569;"' : ''} 
-                onclick="concluirMissao(${m.id})">
-                ${m.concluida ? 'Concluída ✓' : 'Cumprir 🎯'}
-            </button>
-        </div>
-    `).join('');
+async function concluirMissao(id, recompensa) {
+    const hoje = new Date().toDateString();
+    await db.collection('missoes').doc(id).set({ dataConclusao: hoje });
+    await alterarMoedas(recompensa);
+    confetti();
+    mostrarToast(`Parabéns! +${recompensa} moedas!`);
 }
 
-function concluirMissao(id) {
-    let missoes = JSON.parse(localStorage.getItem(STORAGE_KEYS.MISSOES));
-    const missao = missoes.find(m => m.id === id);
-
-    if (missao && !missao.concluida) {
-        missao.concluida = true;
-        localStorage.setItem(STORAGE_KEYS.MISSOES, JSON.stringify(missoes));
-        alterarMoedas(missao.recompensa);
-        carregarMissoes();
-        confetti();
-        mostrarToast(`Parabéns! +${missao.recompensa} moedas!`);
-    }
-}
-
-// --- LOJA E CUPONS ---
+// --- LOJA E CUPONS (FIREBASE) ---
 function carregarLoja() {
     const container = document.getElementById('lista-loja');
     container.innerHTML = itensLoja.map(item => `
@@ -234,31 +387,28 @@ function carregarLoja() {
     `).join('');
 }
 
-function resgatarItem(id) {
+async function resgatarItem(id) {
     const item = itensLoja.find(i => i.id === id);
-    const moedasAtuais = parseInt(localStorage.getItem(STORAGE_KEYS.MOEDAS) || 0);
+    const docMoedas = await db.collection('geral').doc('moedas').get();
+    const moedasAtuais = docMoedas.exists ? docMoedas.data().valor : 0;
 
     if (moedasAtuais < item.preco) {
         mostrarToast('Moedas insuficientes para este mimo! 😅');
         return;
     }
 
-    alterarMoedas(-item.preco);
+    await alterarMoedas(-item.preco);
 
-    // Gerar Cupom
     const novoCupom = {
-        id: Date.now(),
         codigo: 'CUPOM-' + Math.random().toString(36).substring(2, 8).toUpperCase(),
         titulo: item.titulo,
         data: new Date().toLocaleDateString('pt-BR') + ' às ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-        usado: false
+        usado: false,
+        criadoEm: firebase.firestore.FieldValue.serverTimestamp()
     };
 
-    const cupons = JSON.parse(localStorage.getItem(STORAGE_KEYS.CUPONS) || '[]');
-    cupons.unshift(novoCupom);
-    localStorage.setItem(STORAGE_KEYS.CUPONS, JSON.stringify(cupons));
+    await db.collection('cupons').add(novoCupom);
 
-    // Exibir no Modal
     const modalDetalhe = document.getElementById('cupom-detalhe');
     modalDetalhe.innerHTML = `
         <h4>${novoCupom.titulo}</h4>
@@ -267,7 +417,6 @@ function resgatarItem(id) {
     `;
 
     document.getElementById('modal-cupom').style.display = 'flex';
-    carregarCupons();
     confetti();
 }
 
@@ -275,37 +424,34 @@ function fecharModalCupom() {
     document.getElementById('modal-cupom').style.display = 'none';
 }
 
-function carregarCupons() {
-    const container = document.getElementById('lista-cupons');
-    const cupons = JSON.parse(localStorage.getItem(STORAGE_KEYS.CUPONS) || '[]');
+function ouvirCupons() {
+    db.collection('cupons').orderBy('criadoEm', 'desc').onSnapshot(snapshot => {
+        const container = document.getElementById('lista-cupons');
+        if (snapshot.empty) {
+            container.innerHTML = '<p style="text-align:center; color:var(--text-muted);">Nenhum cupom resgatado ainda.</p>';
+            return;
+        }
 
-    if (cupons.length === 0) {
-        container.innerHTML = '<p style="text-align:center; color:var(--text-muted);">Nenhum cupom resgatado ainda.</p>';
-        return;
-    }
-
-    container.innerHTML = cupons.map(c => `
-        <div class="cupom-card" style="${c.usado ? 'opacity: 0.5;' : ''}">
-            <h4>${c.titulo}</h4>
-            <div class="cupom-code">${c.codigo}</div>
-            <p style="font-size:0.8rem; color:var(--text-muted);">Resgatado em ${c.data}</p>
-            <button class="action-btn" style="margin-top:10px; width:100%;" 
-                onclick="marcarCupomUsado(${c.id})" ${c.usado ? 'disabled' : ''}>
-                ${c.usado ? 'Já Utilizado ✓' : 'Usar / Marcar como Usado 🎟️'}
-            </button>
-        </div>
-    `).join('');
+        container.innerHTML = snapshot.docs.map(doc => {
+            const c = doc.data();
+            return `
+                <div class="cupom-card" style="${c.usado ? 'opacity: 0.5;' : ''}">
+                    <h4>${c.titulo}</h4>
+                    <div class="cupom-code">${c.codigo}</div>
+                    <p style="font-size:0.8rem; color:var(--text-muted);">Resgatado em ${c.data}</p>
+                    <button class="action-btn" style="margin-top:10px; width:100%;" 
+                        onclick="marcarCupomUsado('${doc.id}')" ${c.usado ? 'disabled' : ''}>
+                        ${c.usado ? 'Já Utilizado ✓' : 'Usar / Marcar como Usado 🎟️'}
+                    </button>
+                </div>
+            `;
+        }).join('');
+    });
 }
 
 function marcarCupomUsado(id) {
-    let cupons = JSON.parse(localStorage.getItem(STORAGE_KEYS.CUPONS) || '[]');
-    const cupom = cupons.find(c => c.id === id);
-    if (cupom) {
-        cupom.usado = true;
-        localStorage.setItem(STORAGE_KEYS.CUPONS, JSON.stringify(cupons));
-        carregarCupons();
-        mostrarToast('Cupom marcado como utilizado!');
-    }
+    db.collection('cupons').doc(id).update({ usado: true });
+    mostrarToast('Cupom marcado como utilizado!');
 }
 
 // --- ENCONTROS (WHATSAPP) ---
