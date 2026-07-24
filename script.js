@@ -93,6 +93,7 @@ async function alterarMoedas(qtd) {
 }
 
 // --- TELA: DIÁRIO SEMANAL (FIREBASE) ---
+// Melhora na abertura do modal do Diário
 function abrirModalDiario(id = null) {
     const modal = document.getElementById('modal-diario');
     const inputId = document.getElementById('diario-edit-id');
@@ -108,6 +109,7 @@ function abrirModalDiario(id = null) {
                 inputTitulo.value = item.titulo;
                 inputConteudo.value = item.conteudo;
                 modalTitulo.innerText = "Editar Registro Semanal";
+                modal.classList.add('active'); // Usar classe em vez de mexer direto no style
                 modal.style.display = 'flex';
             }
         });
@@ -116,12 +118,15 @@ function abrirModalDiario(id = null) {
         inputTitulo.value = '';
         inputConteudo.value = '';
         modalTitulo.innerText = "Novo Registro Semanal";
+        modal.classList.add('active');
         modal.style.display = 'flex';
     }
 }
 
 function fecharModalDiario() {
-    document.getElementById('modal-diario').style.display = 'none';
+    const modal = document.getElementById('modal-diario');
+    modal.classList.remove('active');
+    modal.style.display = 'none';
 }
 
 async function salvarDiario() {
